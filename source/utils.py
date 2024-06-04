@@ -1,7 +1,8 @@
+import numpy as np
 import pandas as pd
+from typing import List, Dict
 
 from pathlib import Path
-from typing import List, Dict
 
 
 # CLASSES
@@ -149,7 +150,7 @@ def filled(price: float, high: float, low: float) -> bool:
     return (price <= high) and (price >= low)
 
 
-def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str) -> pd.DataFrame:
+def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str, extra_targets: bool=True) -> pd.DataFrame:
     """
     Identifies and counts specific patterns in OHLC data over a given holding period.
 
@@ -157,28 +158,28 @@ def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str) -> pd
     - df (pd.DataFrame): DataFrame containing OHLC data with columns ['time', 'open', 'high', 'low', 'close'].
     - hold_period (int): The holding period to calculate rolling highest and lowest prices.
     - oos_date_start (str): The out-of-sample start date to filter the DataFrame.
+    - extra_targets (bool): Whether to include extra targets in the output DataFrame.
 
     Returns:
     - pattern_labels (list): List of pattern labels for each row in the DataFrame.
     - count_totals (dict): Dictionary with counts of each pattern found.
     - count_success (dict): Dictionary with success counts for each pattern in different categories.
     """
-    # Store patterns and their statistics
-    count_totals = {}
-    count_success = {}
-    pattern_labels = ["0"] * len(df)
-
+    # Preprocess the data
     df = df.copy()
 
     # Calculate rolling highest and lowest prices
     df['highest'] = df['high'].rolling(hold_period).max()
     df['lowest'] = df['low'].rolling(hold_period).min()
 
-    # Filter DataFrame for in-sample data
-    df = df[df['time'] < oos_date_start]
+    # Store patterns and their statistics
+    count_totals = {}
+    count_success = {}
+    pattern_labels = np.zeros(len(df), dtype=object)
 
     # Iterate through the DataFrame
     for i in range(hold_period + 1, len(df)):
+
         bar_0 = df.iloc[i - hold_period]
         bar_1 = df.iloc[i - hold_period - 1]
 
@@ -193,6 +194,13 @@ def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str) -> pd
                    compare_values(bar_0['open'], bar_1['close']) + \
                    compare_values(bar_0['close'], bar_1['open'])
         
+        # Add the pattern to the list of labels
+        pattern_labels[i] = _pattern
+
+        # Filter DataFrame for in-sample data
+        if df.loc[i, 'time'] >= pd.to_datetime(oos_date_start):
+            continue
+        
         # Initialize pattern in the dictionaries if not present
         if _pattern not in count_totals:
             count_totals[_pattern] = 0
@@ -200,10 +208,6 @@ def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str) -> pd
                 'open': 0,
                 'high': 0,
                 'low': 0,
-                'open_1': 0,
-                'high_1': 0,
-                'low_1': 0,
-                'close_1': 0
             }
 
         # Update the count of the pattern
@@ -216,23 +220,22 @@ def find_patterns(df: pd.DataFrame, hold_period: int, oos_date_start: str) -> pd
             count_success[_pattern]['high'] += 1
         if filled(bar_0['low'], _highest, _lowest):
             count_success[_pattern]['low'] += 1
-        if filled(bar_1['open'], _highest, _lowest):
-            count_success[_pattern]['open_1'] += 1
-        if filled(bar_1['high'], _highest, _lowest):
-            count_success[_pattern]['high_1'] += 1
-        if filled(bar_1['low'], _highest, _lowest):
-            count_success[_pattern]['low_1'] += 1
-        if filled(bar_1['close'], _highest, _lowest):
-            count_success[_pattern]['close_1'] += 1
         
-        # Add the pattern to the list of labels
-        pattern_labels[i] = _pattern
+        if extra_targets:
+            if filled(bar_1['open'], _highest, _lowest):
+                count_success[_pattern]['open_1'] = count_success[_pattern].get('open_1', 0) + 1
+            if filled(bar_1['high'], _highest, _lowest):
+                count_success[_pattern]['high_1'] = count_success[_pattern].get('high_1', 0) + 1
+            if filled(bar_1['low'], _highest, _lowest):
+                count_success[_pattern]['low_1'] = count_success[_pattern].get('low_1', 0) + 1
+            if filled(bar_1['close'], _highest, _lowest):
+                count_success[_pattern]['close_1'] = count_success[_pattern].get('close_1', 0) + 1
 
     return pattern_labels, count_totals, count_success
 
 
 def select_patterns(count_totals: Dict[str, int], count_success: Dict[str, Dict[str, int]], 
-                    success_rate_threshold: float = 0.80, total_count_threshold: int = 100) -> List[Signal]:
+                    success_rate_threshold: float = 0.75, total_count_threshold: int = 100) -> List[Signal]:
     """
     Selects pattern codes and targets that achieve over a specified success rate and total count.
 
@@ -248,7 +251,7 @@ def select_patterns(count_totals: Dict[str, int], count_success: Dict[str, Dict[
     if not (set(count_totals.keys()) == set(count_success.keys())):
         raise ValueError("Keys in count_totals and count_success do not match.")
     
-    selected_patterns = []
+    patterns = []
 
     for pattern in count_totals.keys():
         if count_totals[pattern] > total_count_threshold:
@@ -258,15 +261,77 @@ def select_patterns(count_totals: Dict[str, int], count_success: Dict[str, Dict[
                     signal = Signal(
                         pattern=pattern,
                         target=target,
-                        success_rate=success_rate
+                        success_rate=round(success_rate, 3)
                     )
-                    selected_patterns.append(signal)
+                    patterns.append(signal)
     
     # Sort the selected patterns by success rate in descending order
-    selected_patterns.sort(key=lambda x: x.success_rate, reverse=True)
+    patterns.sort(reverse=True)
+
+    # In case of two signals with the same pattern code, select the signal with the higher success rate
+    # Create a dictionary to store the maximum success rate for each pattern code
+    max_success_rate = []
+    selected_patterns = []
+
+    for signal in patterns:
+        if signal.pattern not in max_success_rate:
+            max_success_rate.append(signal.pattern)
+            selected_patterns.append(signal)
     
     return selected_patterns
 
+
+def generate_target_price(df: pd.DataFrame, selected_patterns: List[Signal], pattern_labels: List[int], hold_period:int=1) -> pd.DataFrame:
+    """
+    Generates target price columns for selected patterns in the DataFrame.
+
+    Parameters:
+    - df (pd.DataFrame): The input DataFrame containing OHLC data.
+    - selected_patterns (List[Signal]): A list of selected Signal objects.
+    - pattern_labels (List[int]): A list of pattern labels corresponding to each row in the DataFrame.
+
+    Returns:
+    - pd.DataFrame: The DataFrame with additional columns for target prices.
+    """
+    # Create a dictionary for selected patterns with their target columns
+    selected_patterns_codes = {signal.pattern: signal.target for signal in selected_patterns}
+
+    # Make a copy of the DataFrame to avoid modifying the original
+    df = df.copy()
+    df['patterns'] = pattern_labels.astype(str)
+    df['selected'] = df['patterns'].isin(selected_patterns_codes.keys())
+    df['targets_str'] = ''
+    
+    # Create a shifted DataFrame for previous values
+    df_shift = df.shift(1)
+
+    # Assign target columns based on selected patterns
+    for i in df[df['selected']].index:
+        df.loc[i, 'targets_str'] = selected_patterns_codes[df.loc[i, 'patterns']]
+
+    # Define the conditions and corresponding values for target price selection
+    select_conditions = [
+        (df['targets_str'] == 'open'),
+        (df['targets_str'] == 'high'),
+        (df['targets_str'] == 'low'),
+        (df['targets_str'] == 'close'),
+        (df['targets_str'] == 'open_1'),
+        (df['targets_str'] == 'high_1'),
+        (df['targets_str'] == 'low_1'),
+        (df['targets_str'] == 'close_1')
+    ]
+    select_values = [
+        df['open'], df['high'], df['low'], df['close'], 
+        df_shift['open'], df_shift['high'], df_shift['low'], df_shift['close']
+    ]
+
+    # Generate the 'targets' column based on conditions and values
+    df['targets'] = np.select(select_conditions, select_values, default=np.nan)
+
+    # Forward fill the targets for the holding period
+    df['targets'] = df['targets'].ffill(limit=hold_period)
+    
+    return df
 
 
 if __name__ == "__main__":
