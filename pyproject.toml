@@ -1,0 +1,14 @@
+[tool.ruff]
+extend-select = ["I", "RUF"]
+ignore = ["D100", "D211", "D212", "RUF012"]
+extend-exclude = [
+    ".env", 
+    "test.ipynb", 
+    "*.vuerd.json", 
+    "*.csv", 
+    "*.parquet", 
+    "*.DS_Store", 
+    "*.json", 
+    "__pycache__", 
+    "*.log", 
+]

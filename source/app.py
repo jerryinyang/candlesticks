@@ -1,12 +1,18 @@
+import hashlib
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
 from lightweight_charts import Chart
 from lightweight_charts.table import Table
-import hashlib
-from utils import resample_data, find_patterns, select_patterns, generate_target_price, SessionState
-
+from utils import (
+    SessionState,
+    find_patterns,
+    generate_target_price,
+    resample_data,
+    select_patterns,
+)
 
 # Variables
 oos_date_start = "2023-01-01"
@@ -107,7 +113,7 @@ def fetch_setups(chart : Chart):
     hold_period = int(chart.topbar.get('hold_period').value)
 
     # Get the configuration
-    success_rate_threshold = int(table_config.get(list(table_config.keys())[0])['# --']) / 100
+    success_rate_threshold = int(table_config.get(next(iter(table_config.keys())))['# --']) / 100
     total_count_threshold = int(table_config.get(list(table_config.keys())[1])['# --'])
 
     # Run the analysis
