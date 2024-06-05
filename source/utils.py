@@ -42,6 +42,12 @@ class Signal:
         return self.success_rate == other.success_rate
 
 
+class SessionState:
+    def __init__(self, setups : list, current_setup_index : int):
+        self.setups = setups
+        self.current_setup_index = current_setup_index
+
+
 # FUNCTIONS
 def read_asset_data(asset_name: str) -> pd.DataFrame:
     """
@@ -332,6 +338,8 @@ def generate_target_price(df: pd.DataFrame, selected_patterns: List[Signal], pat
     df['targets'] = df['targets'].ffill(limit=hold_period)
     
     return df
+
+
 
 
 if __name__ == "__main__":
