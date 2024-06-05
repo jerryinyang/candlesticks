@@ -1,8 +1,8 @@
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from typing import List, Dict
-
-from pathlib import Path
 
 
 # CLASSES
@@ -74,7 +74,7 @@ def read_asset_data(asset_name: str) -> pd.DataFrame:
         return pd.DataFrame()
     
 
-def resample_data(data: pd.DataFrame, timeframe: str, datetime_col: str = None) -> pd.DataFrame:
+def resample_data(data: pd.DataFrame, timeframe: str, datetime_col: Optional[str] = None) -> pd.DataFrame:
     """
     Resamples 1-minute OHLC data into a given timeframe.
     
