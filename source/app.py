@@ -161,8 +161,13 @@ def display_setup(chart : Chart):
     filtered_df = test_df[(test_df['time'] >= start_date) & (test_df['time'] < end_date)]
     filtered_features = features[(features['time'] >= start_date) & (features['time'] < end_date)]
 
-    filtered_df = filtered_df.head()
-    filtered_features = filtered_features.head()
+    try:
+        if chart.topbar['replay_mode'].value:
+            filtered_df = filtered_df.head()
+            filtered_features = filtered_features.head()
+    except Exception as e:
+        print(e)
+    
 
     # Update session_state
     session_state.current_df = (test_df, features)
@@ -236,6 +241,9 @@ def on_next_bar(chart: Chart):
 
     # Update the features
     for line in chart.lines():
+        if np.isnan(features[line.name]):
+            continue
+
         line.update(pd.Series({
             'time': bar['time'], 
             line.name : features[line.name]
@@ -246,7 +254,11 @@ def on_fit(key):
     chart.fit()
 
 
-def on_nothing(*args, **kwargs):
+def on_nothing(chart):
+    pass
+    
+
+def on_test(*args, **kwargs):
     print("args", args)
     print("kwargs", kwargs)
 
@@ -282,7 +294,7 @@ if __name__ == '__main__':
         'next_setup',
         'Next',
         align='left',
-        func=on_next_setup
+        func=on_next_setup,
     )
 
     # Setup Count
@@ -292,12 +304,22 @@ if __name__ == '__main__':
         align='left',
     )
 
+
+    # Replay Mode
+    chart.topbar.button(
+        'replay_mode',
+        'Replay Mode',
+        align='left',
+        toggle=True,
+        func=on_nothing, 
+    )
+
     # Next Bar Button 
     chart.topbar.button(
         'next_bar',
         '>>>',
         align='left',
-        func=on_next_bar
+        func=on_next_bar,
     )
     
     # region - Configuration Settings
