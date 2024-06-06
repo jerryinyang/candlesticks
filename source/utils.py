@@ -43,9 +43,12 @@ class Signal:
 
 
 class SessionState:
-    def __init__(self, setups : list, current_setup_index : int):
+    def __init__(self, setups : list, current_setup_index : int, current_df: tuple[pd.DataFrame], end_index: int):
         self.setups = setups
         self.current_setup_index = current_setup_index
+        
+        self.current_df  = current_df
+        self.end_index = end_index
 
 
 # FUNCTIONS

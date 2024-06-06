@@ -30,7 +30,9 @@ table_setups : Table = None
 
 session_state = SessionState(
     setups = None,
-    current_setup_index=-1
+    current_setup_index=-1,
+    current_df=(None, None),
+    end_index=None
 )
 
 
@@ -157,8 +159,14 @@ def display_setup(chart : Chart):
 
     # Filter the dataframe based on the selected dates
     filtered_df = test_df[(test_df['time'] >= start_date) & (test_df['time'] < end_date)]
-    # filtered_features = features[features['time'].isin(filtered_df['time'])]
     filtered_features = features[(features['time'] >= start_date) & (features['time'] < end_date)]
+
+    filtered_df = filtered_df.head()
+    filtered_features = filtered_features.head()
+
+    # Update session_state
+    session_state.current_df = (test_df, features)
+    session_state.end_index = filtered_features.index[-1]
 
     # Use Streamlit container to adjust chart to screen size
     plot_chart(chart, filtered_df, filtered_features, start_date=start_date, end_date=end_date, target=target_price)
@@ -190,17 +198,9 @@ def plot_chart(chart : Chart, data, features, **kwargs):
 
         line.set(features[['time', feature]])
         
-
     # Display the charts
     chart.set(df)
     chart.fit()
-
-    # if 'RSI' in features:
-    #     rsi_chart = Chart()  # New Pane
-    #     rsi_chart.legend(visible=True)
-    #     rsi_line = rsi_chart.create_line('RSI')
-    #     rsi_line.set(features[['time', 'RSI']])
-    #     rsi_chart.load()
 
 
 def on_timeframe_selection(chart : Chart):
@@ -224,6 +224,28 @@ def on_previous_setup(chart):
     display_setup(chart)
 
 
+def on_next_bar(chart: Chart):
+    session_state.end_index += 1
+    index = session_state.end_index
+
+    bar = session_state.current_df[0].iloc[index]
+    features = session_state.current_df[1].iloc[index]
+    
+    # Update the chart bar
+    chart.update(bar)
+
+    # Update the features
+    for line in chart.lines():
+        line.update(pd.Series({
+            'time': bar['time'], 
+            line.name : features[line.name]
+        }))
+
+
+def on_fit(key):
+    chart.fit()
+
+
 def on_nothing(*args, **kwargs):
     print("args", args)
     print("kwargs", kwargs)
@@ -237,8 +259,9 @@ configs = [
 
 if __name__ == '__main__':
     chart = Chart(inner_width=.7, inner_height=1, maximize=True, toolbox=True)
+    chart.hotkey("ctrl", "R", on_fit)
 
-    # Chart Top Bar Configurations
+    # Chart Timeframe Dropdown 
     chart.topbar.menu(
         'timeframe', 
         options=(options_source_timeframe),
@@ -246,6 +269,7 @@ if __name__ == '__main__':
         func=on_timeframe_selection
     )
 
+    # Previous Setup Buttons
     chart.topbar.button(
         'previous_setup',
         'Previous',
@@ -253,6 +277,7 @@ if __name__ == '__main__':
         func=on_previous_setup
     )
 
+    # Next Setup Buttons
     chart.topbar.button(
         'next_setup',
         'Next',
@@ -260,13 +285,23 @@ if __name__ == '__main__':
         func=on_next_setup
     )
 
+    # Setup Count
     chart.topbar.textbox(
         'title_setup_count',
         '# of #',
         align='left',
     )
+
+    # Next Bar Button 
+    chart.topbar.button(
+        'next_bar',
+        '>>>',
+        align='left',
+        func=on_next_bar
+    )
     
-    
+    # region - Configuration Settings
+    # Source Timeframe
     chart.topbar.textbox(
         'title_source_timeframe',
         'Source Timeframe',
@@ -279,6 +314,7 @@ if __name__ == '__main__':
         func=fetch_setups,
     )
     
+    # Hold Period
     chart.topbar.textbox(
         'title_hold_period',
         'Hold Period',
@@ -291,15 +327,16 @@ if __name__ == '__main__':
         func=fetch_setups
     )
     
+    # Reset Backtest Button
     chart.topbar.button(
         'reset_backtest',
         'Reset Backtest',
         align='right',
         func=on_reset
     )
+    # endregion
 
-
-    # Configuration Dashboard
+    # region - Configuration Dashboard
     table_config = chart.create_table(
         width=0.3, 
         height=.5,
@@ -323,8 +360,8 @@ if __name__ == '__main__':
         position='right', 
         func=on_nothing, 
     )
-
+    # endregion
+    
     fetch_setups(chart)
-
     chart.show(block=True)
     
