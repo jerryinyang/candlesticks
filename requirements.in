@@ -1,0 +1,7 @@
+aiomultiprocess 
+aiobotocore 
+aiohttp 
+ccxt 
+pandas 
+boto3
+awscli
