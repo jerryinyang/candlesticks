@@ -15,13 +15,15 @@ from utils import (
 )
 
 # Variables
+sample_date_start = "2018-01-01"
 oos_date_start = "2023-01-01"
 
 # Load the data
 cwd = Path.cwd()
 data_path = cwd / 'data' / 'clean' / 'btcusdt.parquet'
-raw_df = pd.read_parquet(data_path)
+raw_df = pd.read_parquet(data_path) 
 raw_df['time'] = pd.to_datetime(raw_df['time'])
+raw_df = raw_df[raw_df['time'] >= sample_date_start]
 
 chart : Chart = None
 table_config : Table = None
@@ -333,7 +335,7 @@ if __name__ == '__main__':
         'source_timeframe', 
         options=('4h', '8h', '1d', '1w'),
         align='right',
-        func=fetch_setups,
+        func=on_reset,
     )
     
     # Hold Period
@@ -346,7 +348,7 @@ if __name__ == '__main__':
         'hold_period',
         '1',
         align='right',
-        func=fetch_setups
+        func=on_reset
     )
     
     # Reset Backtest Button
