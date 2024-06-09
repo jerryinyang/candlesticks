@@ -343,7 +343,5 @@ def generate_target_price(df: pd.DataFrame, selected_patterns: List[Signal], pat
     return df
 
 
-
-
 if __name__ == "__main__":
     print(read_asset_data('btcusdt'))
