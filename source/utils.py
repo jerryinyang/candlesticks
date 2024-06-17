@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+# TODO : Correct the algorithm. The first selected date is actually the first date after the setup is found (it's the first day of the setup)
 
 # CLASSES
 class Signal:
